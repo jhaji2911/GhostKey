@@ -1,0 +1,4 @@
+# secrets.yaml — DO NOT COMMIT THIS FILE
+# Add to .gitignore: secrets.yaml
+mappings:
+  # "GHOST::openai-prod": "sk-proj-..."

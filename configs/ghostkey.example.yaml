@@ -1,0 +1,23 @@
+proxy:
+  listen_addr: "127.0.0.1:9876"
+  read_timeout: 30
+  write_timeout: 30
+
+vault:
+  backend: file               # "file", "env", or "hashicorp"
+  file_path: "./secrets.yaml" # for "file" backend
+  watch_file: true            # hot-reload on file change
+
+  # Inline mappings (alternative to file backend, for simple cases)
+  # mappings:
+  #   "GHOST::openai-prod": "sk-proj-..."
+  #   "GHOST::github-ci": "ghp_..."
+
+audit:
+  enabled: true
+  file_path: "./ghostkey-audit.ndjson"
+  format: json
+
+ca:
+  cert_file: ""   # leave empty to auto-generate at ~/.ghostkey/ca.crt
+  key_file: ""

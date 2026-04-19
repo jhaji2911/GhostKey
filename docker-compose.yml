@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  ghostkey:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9876:9876"
+    volumes:
+      - ./ghostkey.yaml:/ghostkey.yaml:ro
+      - ./secrets.yaml:/secrets.yaml:ro
+      - ghostkey-data:/root/.ghostkey
+    command: ["start", "--config", "/ghostkey.yaml"]
+
+  # Example: run your AI agent alongside GhostKey
+  # agent:
+  #   image: your-agent-image
+  #   environment:
+  #     HTTPS_PROXY: http://ghostkey:9876
+  #     HTTP_PROXY: http://ghostkey:9876
+  #     OPENAI_API_KEY: GHOST::openai-prod
+  #   depends_on:
+  #     - ghostkey
+
+volumes:
+  ghostkey-data:
