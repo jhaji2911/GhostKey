@@ -37,11 +37,6 @@ jobs:
           go-version-file: go.mod
           cache: true
       - uses: golangci/golangci-lint-action@v6
-        with:
-          # v1.x topped out at v1.64.8 (built with go1.24) which rejects go.mod
-          # directives >= go1.25. v2.x is built with go1.24+ and handles it.
-          # Using "latest" always picks up the current stable release.
-          version: latest
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

@@ -1,0 +1,29 @@
+run:
+  # Tell golangci-lint to target Go 1.22 syntax/semantics.
+  # This overrides the `go` directive in go.mod (which may be bumped higher
+  # by `go mod tidy` when newer x/ packages are in the graph) and prevents
+  # golangci-lint from refusing to run because go.mod > its own build version.
+  go: "1.22"
+  timeout: 5m
+
+linters:
+  enable-all: false
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+    - gofmt
+
+issues:
+  exclude-rules:
+    # InsecureSkipVerify is intentional in tests and CLI helpers that document it.
+    - linters: [gosec]
+      text: "G402"
+      path: "_test\\.go"
+    - linters: [gosec]
+      text: "G402"
+      path: "cmd/ghostkey/main\\.go"
