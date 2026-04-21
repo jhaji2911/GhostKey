@@ -100,7 +100,7 @@ func generateAndSaveCA() (*CAManager, error) {
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCert.Raw})
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0644); err != nil { //nolint:gosec // CA cert is public; 0644 is intentional
 		return nil, fmt.Errorf("tls: write CA cert: %w", err)
 	}
 

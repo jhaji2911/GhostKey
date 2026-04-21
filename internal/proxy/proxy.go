@@ -37,13 +37,13 @@ import (
 
 // Proxy is the core GhostKey MITM proxy server.
 type Proxy struct {
-	cfg              *config.Config
-	vault            vault.Vault
-	ca               *CAManager
-	auditor          *audit.Auditor
-	logger           *zap.Logger
-	server           *http.Server
-	upstreamTLSConf  *tls.Config // nil uses system defaults; override in tests
+	cfg             *config.Config
+	vault           vault.Vault
+	ca              *CAManager
+	auditor         *audit.Auditor
+	logger          *zap.Logger
+	server          *http.Server
+	upstreamTLSConf *tls.Config // nil uses system defaults; override in tests
 }
 
 // New creates a Proxy with the given dependencies.
@@ -121,7 +121,7 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		p.logger.Error("proxy: hijack", zap.String("host", host), zap.Error(err))
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	// Flush any bytes buffered by the ResponseWriter (the 200 status line)
 	// before we hand the raw conn to the TLS layer.
 	if err := brw.Flush(); err != nil {
@@ -145,7 +145,7 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		p.logger.Debug("proxy: agent TLS handshake", zap.String("host", host), zap.Error(err))
 		return
 	}
-	defer agentTLS.Close()
+	defer func() { _ = agentTLS.Close() }()
 
 	// Server-side TLS: GhostKey connects to the real upstream.
 	upConf := &tls.Config{
@@ -161,7 +161,7 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 		p.logger.Error("proxy: upstream dial", zap.String("host", host), zap.Error(err))
 		return
 	}
-	defer upstream.Close()
+	defer func() { _ = upstream.Close() }()
 
 	// Process one HTTP/1.1 request at a time over the intercepted TLS session.
 	agentReader := bufio.NewReader(agentTLS)

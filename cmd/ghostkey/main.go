@@ -121,7 +121,7 @@ func startCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer a.Close()
+			defer func() { _ = a.Close() }()
 
 			// Build and start proxy
 			p := proxy.New(cfg, v, ca, a, logger)
@@ -180,7 +180,7 @@ func caInstallCmd() *cobra.Command {
 			switch runtime.GOOS {
 			case "darwin":
 				fmt.Printf("Installing CA into macOS system keychain: %s\n", certPath)
-				c := exec.Command("sudo", "security", "add-trusted-cert",
+				c := exec.Command("sudo", "security", "add-trusted-cert", //nolint:gosec // intentional: installs CA into system keychain
 					"-d", "-r", "trustRoot",
 					"-k", "/Library/Keychains/System.keychain",
 					certPath)
@@ -195,20 +195,20 @@ func caInstallCmd() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					if err := os.WriteFile(dest, data, 0644); err != nil {
+					if err := os.WriteFile(dest, data, 0644); err != nil { //nolint:gosec // CA cert is public; world-readable is correct for trust anchors
 						return fmt.Errorf("write %s (try sudo): %w", dest, err)
 					}
-					return exec.Command("sudo", "update-ca-certificates").Run()
+					return exec.Command("sudo", "update-ca-certificates").Run() //nolint:gosec // intentional: runs system CA update tool
 				}
 				dest := "/etc/pki/ca-trust/source/anchors/ghostkey.crt"
 				data, err := os.ReadFile(certPath)
 				if err != nil {
 					return err
 				}
-				if err := os.WriteFile(dest, data, 0644); err != nil {
+				if err := os.WriteFile(dest, data, 0644); err != nil { //nolint:gosec // CA cert is public; world-readable is correct for trust anchors
 					return fmt.Errorf("write %s (try sudo): %w", dest, err)
 				}
-				return exec.Command("sudo", "update-ca-trust").Run()
+				return exec.Command("sudo", "update-ca-trust").Run() //nolint:gosec // intentional: runs system CA update tool
 			default:
 				return fmt.Errorf("automatic install not supported on %s — see 'ghostkey ca show'", runtime.GOOS)
 			}
@@ -630,9 +630,9 @@ Examples:
 					"  ✗ Proxy is not running\n    GhostKey needs to be running before you can wrap commands.\n    Fix: ghostkey start\n    Or install as a service: ghostkey service install",
 				)
 			}
-			conn.Close()
+			_ = conn.Close()
 
-			proc := exec.Command(args[0], args[1:]...)
+			proc := exec.Command(args[0], args[1:]...) //nolint:gosec // intentional: wraps arbitrary user command with proxy env vars
 			proc.Env = append(os.Environ(),
 				"HTTPS_PROXY="+proxyURL,
 				"HTTP_PROXY="+proxyURL,
@@ -730,7 +730,7 @@ func doctorCmd() *cobra.Command {
 				fmt.Printf("      Or install as a service: ghostkey service install\n")
 				issues++
 			} else {
-				conn.Close()
+				_ = conn.Close()
 				fmt.Printf("  [✓] Proxy:        Running on %s\n", listenAddr)
 			}
 
@@ -1010,7 +1010,7 @@ func applyFixes(basePath string, matches []scanMatch) error {
 			ghostsAdded[m.Ghost] = true
 		}
 
-		if err := os.WriteFile(fullPath, []byte(content), 0600); err != nil {
+		if err := os.WriteFile(fullPath, []byte(content), 0600); err != nil { //nolint:gosec // path is constructed from Walk output, not user input
 			fmt.Printf("  ✗ Could not write %s: %v\n", relPath, err)
 			continue
 		}
@@ -1084,25 +1084,25 @@ func serviceInstallCmd() *cobra.Command {
   <key>StandardErrorPath</key><string>` + logPath + `</string>
 </dict>
 </plist>`
-				if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
+				if err := os.WriteFile(plistPath, []byte(plist), 0600); err != nil {
 					return fmt.Errorf("could not write plist: %w", err)
 				}
-				_ = exec.Command("launchctl", "unload", plistPath).Run()
-				if err := exec.Command("launchctl", "load", plistPath).Run(); err != nil {
+				_ = exec.Command("launchctl", "unload", plistPath).Run() //nolint:gosec // intentional: manages launchd service
+				if err := exec.Command("launchctl", "load", plistPath).Run(); err != nil { //nolint:gosec // intentional: manages launchd service
 					return fmt.Errorf("launchctl load failed: %w", err)
 				}
 				fmt.Println("  ✓ Service registered (launchd) — starts automatically on login")
 
 			case "linux":
 				svcDir := filepath.Join(home, ".config", "systemd", "user")
-				if err := os.MkdirAll(svcDir, 0755); err != nil {
+				if err := os.MkdirAll(svcDir, 0750); err != nil {
 					return err
 				}
 				unit := "[Unit]\nDescription=GhostKey credential proxy\nAfter=network.target\n\n" +
 					"[Service]\nExecStart=" + binaryPath + " start --config " + configPath + "\n" +
 					"Restart=always\nRestartSec=3\n\n[Install]\nWantedBy=default.target\n"
 				svcPath := filepath.Join(svcDir, "ghostkey.service")
-				if err := os.WriteFile(svcPath, []byte(unit), 0644); err != nil {
+				if err := os.WriteFile(svcPath, []byte(unit), 0600); err != nil {
 					return fmt.Errorf("could not write service file: %w", err)
 				}
 				_ = exec.Command("systemctl", "--user", "enable", "ghostkey").Run()
@@ -1270,7 +1270,7 @@ func appendToSecretsFile(path, ghost, real string) error {
 	content += line
 
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), 0600); err != nil { //nolint:gosec // tmp path is derived from the validated config path
 		return fmt.Errorf("vault: write secrets file: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {

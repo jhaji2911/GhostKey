@@ -84,7 +84,7 @@ func TestEndToEndHTTPSInterception(t *testing.T) {
 		t.Fatal(err)
 	}
 	go p.server.Serve(ln) //nolint:errcheck
-	defer p.server.Close()
+	defer func() { _ = p.server.Close() }()
 	proxyAddr := ln.Addr().String()
 
 	// ------------------------------------------------------------------
@@ -117,7 +117,7 @@ func TestEndToEndHTTPSInterception(t *testing.T) {
 	if doErr != nil {
 		t.Fatalf("client.Do: %v", doErr)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// ------------------------------------------------------------------
 	// 7. Assertions.

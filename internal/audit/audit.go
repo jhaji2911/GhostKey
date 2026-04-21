@@ -28,13 +28,13 @@ const (
 type Event struct {
 	Timestamp   time.Time `json:"ts"`
 	EventType   string    `json:"event"`
-	GhostTokens []string  `json:"ghost_tokens"`       // ghost tokens seen (NEVER real tokens)
-	Upstream    string    `json:"upstream"`           // e.g. "api.openai.com:443"
-	Method      string    `json:"method,omitempty"`   // HTTP method
-	Path        string    `json:"path,omitempty"`     // URL path (already scrubbed)
+	GhostTokens []string  `json:"ghost_tokens"`        // ghost tokens seen (NEVER real tokens)
+	Upstream    string    `json:"upstream"`            // e.g. "api.openai.com:443"
+	Method      string    `json:"method,omitempty"`    // HTTP method
+	Path        string    `json:"path,omitempty"`      // URL path (already scrubbed)
 	Locations   []string  `json:"locations,omitempty"` // where tokens were found
 	AgentPID    int       `json:"agent_pid,omitempty"`
-	Rewrites    int       `json:"rewrites"` // count of substitutions made
+	Rewrites    int       `json:"rewrites"`            // count of substitutions made
 }
 
 // Auditor writes structured NDJSON audit events to a file or stdout.
@@ -57,7 +57,7 @@ func New(enabled bool, filePath string) (*Auditor, error) {
 		f = os.Stdout
 	} else {
 		var err error
-		f, err = os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		f, err = os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600) //nolint:gosec // path comes from trusted config
 		if err != nil {
 			return nil, fmt.Errorf("audit: open %q: %w", filePath, err)
 		}
@@ -103,12 +103,12 @@ func TailFile(path string) (<-chan Event, <-chan error) {
 		defer close(events)
 		defer close(errs)
 
-		f, err := os.Open(path)
+		f, err := os.Open(path) //nolint:gosec // path comes from trusted config
 		if err != nil {
 			errs <- fmt.Errorf("audit: open %q: %w", path, err)
 			return
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		for {
 			scanner := bufio.NewScanner(f)

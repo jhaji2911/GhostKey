@@ -78,7 +78,7 @@ func (f *FileVault) reload() error {
 }
 
 func (f *FileVault) watchLoop() {
-	defer f.watcher.Close()
+	defer func() { _ = f.watcher.Close() }()
 	for {
 		select {
 		case event, ok := <-f.watcher.Events:
