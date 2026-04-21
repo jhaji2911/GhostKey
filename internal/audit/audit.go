@@ -34,7 +34,7 @@ type Event struct {
 	Path        string    `json:"path,omitempty"`      // URL path (already scrubbed)
 	Locations   []string  `json:"locations,omitempty"` // where tokens were found
 	AgentPID    int       `json:"agent_pid,omitempty"`
-	Rewrites    int       `json:"rewrites"`            // count of substitutions made
+	Rewrites    int       `json:"rewrites"` // count of substitutions made
 }
 
 // Auditor writes structured NDJSON audit events to a file or stdout.

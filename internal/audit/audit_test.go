@@ -91,7 +91,7 @@ func TestRealTokenNeverInLog(t *testing.T) {
 	})
 	_ = a.Close()
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // intentional: path is a temp file created by the test
 	if err != nil {
 		t.Fatal(err)
 	}
