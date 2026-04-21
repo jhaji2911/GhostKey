@@ -13,6 +13,9 @@ linters:
     - staticcheck
     - unused
     - gosec
+
+formatters:
+  enable:
     - gofmt
 
 issues:
