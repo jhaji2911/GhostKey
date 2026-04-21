@@ -4,14 +4,12 @@ run:
   timeout: 5m
 
 linters:
-  default: none
+  # Use golangci-lint v2's curated default set (govet, errcheck, staticcheck,
+  # ineffassign, etc.). This is more maintainable than enumerating linters
+  # manually — v2 removed gosimple/unused as standalone linters (both merged
+  # into staticcheck) and may rename others in future releases.
+  default: standard
   enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
     - gosec
 
 formatters:
