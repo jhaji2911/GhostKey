@@ -14,9 +14,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/yourusername/ghostkey/internal/audit"
-	"github.com/yourusername/ghostkey/internal/config"
-	"github.com/yourusername/ghostkey/internal/vault"
+	"github.com/jhaji2911/GhostKey/internal/audit"
+	"github.com/jhaji2911/GhostKey/internal/config"
+	"github.com/jhaji2911/GhostKey/internal/vault"
 )
 
 // TestEndToEndHTTPSInterception is the primary integration test.
@@ -76,6 +76,8 @@ func TestEndToEndHTTPSInterception(t *testing.T) {
 
 	logger := zap.NewNop()
 	p := New(cfg, v, ca, a, logger)
+	// Allow the proxy's upstream dialer to trust the httptest self-signed cert.
+	p.upstreamTLSConf = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

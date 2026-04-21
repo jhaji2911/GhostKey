@@ -3,17 +3,27 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    # Tag pushes trigger the release job.
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Test on both runners so OS-specific code (launchd vs systemd,
+        # keychain vs update-ca-certificates) is exercised in CI.
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          # Read the version from go.mod automatically — never gets out of sync.
+          go-version-file: go.mod
+          cache: true
       - run: go mod download
       - run: go test -race -coverprofile=coverage.out ./...
       - run: go vet ./...
@@ -24,19 +34,32 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version-file: go.mod
+          cache: true
       - uses: golangci/golangci-lint-action@v6
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [test, lint]
     runs-on: ubuntu-latest
+    # Required so the job can upload artifacts to the GitHub Release.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Fetch full history so `git describe --tags` works correctly.
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
-      - run: make release
-      - uses: softprops/action-gh-release@v2
+          go-version-file: go.mod
+          cache: true
+      # Pass the tag that triggered this workflow as VERSION so the baked-in
+      # version string matches the release tag exactly.
+      - name: Build release binaries
+        run: make release VERSION=${{ github.ref_name }}
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: dist/*
