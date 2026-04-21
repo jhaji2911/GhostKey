@@ -37,6 +37,16 @@ jobs:
           go-version-file: go.mod
           cache: true
       - uses: golangci/golangci-lint-action@v6
+        with:
+          # v1.64.8 was built with go1.24 and rejects go.mod with `go 1.25.0`.
+          # Pin to a release built with go1.25+ to stay compatible as the
+          # module graph pulls in newer x/ packages.
+          version: v1.65.0
+        with:
+          # v1.64.8 was built with go1.24 and rejects go.mod with `go 1.25.0`.
+          # Pin to a release built with go1.25+ to stay compatible as the
+          # module graph pulls in newer x/ packages.
+          version: v1.65.0
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
