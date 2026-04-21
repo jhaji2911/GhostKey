@@ -14,9 +14,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/jhaji2911/GhostKey/internal/audit"
-	"github.com/jhaji2911/GhostKey/internal/config"
-	"github.com/jhaji2911/GhostKey/internal/vault"
+	"github.com/jhaji2911/ghostkey/internal/audit"
+	"github.com/jhaji2911/ghostkey/internal/config"
+	"github.com/jhaji2911/ghostkey/internal/vault"
 )
 
 // TestEndToEndHTTPSInterception is the primary integration test.

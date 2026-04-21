@@ -6,22 +6,22 @@ class Ghostkey < Formula
   on_macos do
     on_arm do
       url "https://github.com/jhaji2911/GhostKey/releases/download/v0.1.4/ghostkey-darwin-arm64"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256"
+      sha256 "093df099b2f3a83e4d0ed4ca51aa05cbd1eb8c1a9a1048c34b0aa34549bf678d"
     end
     on_intel do
       url "https://github.com/jhaji2911/GhostKey/releases/download/v0.1.4/ghostkey-darwin-amd64"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256"
+      sha256 "b0a1451b5d5cf90c76450d28a6227e020b923d8b8d088d063deba174be884b35"
     end
   end
 
   on_linux do
     on_arm do
       url "https://github.com/jhaji2911/GhostKey/releases/download/v0.1.4/ghostkey-linux-arm64"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256"
+      sha256 "f362fc41ec257cece99a5fc9a614935366dff0369441f83b5b8eb71be63e59be"
     end
     on_intel do
       url "https://github.com/jhaji2911/GhostKey/releases/download/v0.1.4/ghostkey-linux-amd64"
-      sha256 "REPLACE_WITH_ACTUAL_SHA256"
+      sha256 "bb01365469df7e946e09e164d7a1f4d3711390914fd14df8ac69c7e965c0621d"
     end
   end
 

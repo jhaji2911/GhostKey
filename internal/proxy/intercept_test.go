@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jhaji2911/GhostKey/internal/vault"
+	"github.com/jhaji2911/ghostkey/internal/vault"
 )
 
 func setupVault() vault.Vault {

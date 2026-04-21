@@ -17,21 +17,27 @@ GhostKey fixes this at the network layer. The agent is given a fake placeholder 
 ## Quick Start
 
 ```bash
-# Install
+# Install via Homebrew tap
+brew tap jhaji2911/ghostkey https://github.com/jhaji2911/ghostkey
 brew install ghostkey
-# or: go install github.com/yourusername/ghostkey/cmd/ghostkey@latest
+
+# or: install from source
+go install github.com/jhaji2911/ghostkey/cmd/ghostkey@latest
 
 # Trust the CA (one-time setup)
 ghostkey ca install
 
-# Add a credential mapping (reads real token from stdin — never from CLI args)
-ghostkey vault add GHOST::openai -
+# Add a credential mapping (interactive secure prompt)
+ghostkey vault add GHOST::openai
 # Enter real token: sk-proj-...
 
 # Start the proxy (port 9876)
 ghostkey start
 
-# In another terminal: run your AI agent with ghost tokens
+# In another terminal: run your AI agent through GhostKey
+ghostkey wrap -- python your_agent.py
+
+# Or set proxy env vars manually
 export HTTPS_PROXY=http://localhost:9876
 export HTTP_PROXY=http://localhost:9876
 export OPENAI_API_KEY=GHOST::openai
@@ -126,15 +132,23 @@ mappings:
 
 ```
 ghostkey start [-c config] [--listen addr] [-v]    Start the proxy
+ghostkey wrap -- <cmd> [args...]                    Run command with proxy env vars injected
 ghostkey ca install                                Install CA to system trust store
+ghostkey ca uninstall                              Remove CA from trust store and disk
 ghostkey ca show                                   Print CA PEM to stdout
 ghostkey ca regen                                  Regenerate CA (invalidates leaf cache)
 ghostkey vault list                                List ghost tokens (never real values)
-ghostkey vault add <GHOST::name> -                 Add mapping (reads real token from stdin)
+ghostkey vault add <GHOST::name>                   Add mapping (interactive secure prompt)
 ghostkey vault revoke <GHOST::name>                Remove a mapping
 ghostkey audit tail                                Stream audit log (like tail -f)
 ghostkey audit stats                               Summary statistics
+ghostkey scan [path]                               Scan directory for exposed credentials
+ghostkey service install                           Register as login service (launchd/systemd)
+ghostkey service uninstall                         Remove service registration
+ghostkey service status                            Show service status
+ghostkey service logs                              Tail service log
 ghostkey check                                     Verify config + CA + vault
+ghostkey doctor                                    Full installation health check
 ghostkey version                                   Print version
 ```
 
@@ -179,7 +193,7 @@ ghostkey version                                   Print version
 
 ## Roadmap
 
-The following are intentionally out of scope for v0.1.3:
+The following are intentionally out of scope for v0.1.4:
 
 - gRPC support (v0.2.0)
 - WebSocket support (v0.2.0)
@@ -191,6 +205,15 @@ The following are intentionally out of scope for v0.1.3:
 ---
 
 ## Changelog
+
+### v0.1.4
+
+- `ghostkey wrap` — run any command with proxy env vars injected (no system proxy changes)
+- `ghostkey scan` — detect real credentials in a directory and replace them with ghost tokens
+- `ghostkey service` — register/unregister as a login service (launchd on macOS, systemd --user on Linux)
+- `ghostkey doctor` — full installation health check (CA trust, proxy, vault, service)
+- `ghostkey ca uninstall` — remove CA from system trust store and disk
+- Fixed module path (`github.com/jhaji2911/ghostkey`) so `go install` works correctly
 
 ### v0.1.3 — Complete Rewrite in Go
 
