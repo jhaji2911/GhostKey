@@ -165,7 +165,7 @@ func rewriteString(s string, v vault.Vault, location string) (string, []RewriteE
 // Gzip-encoded bodies are decompressed before scanning and recompressed afterward
 // if any token is found.
 func rewriteBody(body io.ReadCloser, encoding string, v vault.Vault) ([]RewriteEvent, *bytes.Reader, int, error) {
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	// Read up to maxBodyInspectSize+1 bytes to detect oversized bodies.
 	limited := io.LimitReader(body, maxBodyInspectSize+1)

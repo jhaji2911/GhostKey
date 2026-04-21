@@ -17,7 +17,7 @@ func TestAuditorLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 
 	a.Log(Event{
 		EventType:   EventIntercept,
@@ -29,11 +29,11 @@ func TestAuditorLog(t *testing.T) {
 	})
 
 	// Read back and verify
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // test helper path
 	if err != nil {
 		t.Fatalf("open log: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var events []Event
 	scanner := bufio.NewScanner(f)
@@ -80,7 +80,7 @@ func TestRealTokenNeverInLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 
 	// Simulate an event — real token deliberately not in the Event struct
 	a.Log(Event{
@@ -96,7 +96,7 @@ func TestRealTokenNeverInLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	realToken := "sk-proj-actual-real-secret"
+	realToken := "sk-proj-actual-real-secret" //nolint:gosec // intentional: test verifies this string never appears in the log
 	if contains := string(data); len(realToken) > 0 {
 		_ = contains
 		// The real token was never passed in, so it can't appear.

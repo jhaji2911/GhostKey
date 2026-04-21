@@ -99,7 +99,7 @@ func TestNoGhostTokenUnchanged(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://api.example.com/", nil)
 	req.Header.Set("Authorization", "Bearer regular-token")
 
-	_ , evts, err := RewriteRequest(req, v)
+	_, evts, err := RewriteRequest(req, v)
 	if err != nil {
 		t.Fatalf("RewriteRequest: %v", err)
 	}
