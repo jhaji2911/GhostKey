@@ -191,7 +191,7 @@ func caInstallCmd() *cobra.Command {
 				fmt.Printf("Installing CA on Linux: %s\n", certPath)
 				if _, err := os.Stat("/etc/debian_version"); err == nil {
 					dest := "/usr/local/share/ca-certificates/ghostkey.crt"
-					data, err := os.ReadFile(certPath)
+					data, err := os.ReadFile(certPath) //nolint:gosec // intentional: certPath is derived from user home directory
 					if err != nil {
 						return err
 					}
@@ -201,7 +201,7 @@ func caInstallCmd() *cobra.Command {
 					return exec.Command("sudo", "update-ca-certificates").Run() //nolint:gosec // intentional: runs system CA update tool
 				}
 				dest := "/etc/pki/ca-trust/source/anchors/ghostkey.crt"
-				data, err := os.ReadFile(certPath)
+				data, err := os.ReadFile(certPath) //nolint:gosec // intentional: certPath is derived from user home directory
 				if err != nil {
 					return err
 				}
@@ -283,7 +283,7 @@ func caShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			data, err := os.ReadFile(certPath)
+			data, err := os.ReadFile(certPath) //nolint:gosec // intentional: certPath is derived from user home directory
 			if err != nil {
 				return fmt.Errorf("CA cert not found — run 'ghostkey start' once to generate it: %w", err)
 			}
@@ -696,7 +696,7 @@ func doctorCmd() *cobra.Command {
 				issues++
 			} else {
 				// Check expiry
-				data, _ := os.ReadFile(certPath)
+				data, _ := os.ReadFile(certPath) //nolint:gosec // intentional: certPath is derived from user home directory
 				expiry := parseCertExpiry(data)
 				if expiry.IsZero() {
 					fmt.Printf("  [✓] CA cert:      %s\n", certPath)
@@ -908,7 +908,7 @@ func scanCmd() *cobra.Command {
 					return nil
 				}
 
-				data, err := os.ReadFile(path)
+				data, err := os.ReadFile(path) //nolint:gosec // intentional: path is from filepath.Walk output, not user input
 				if err != nil {
 					return nil
 				}
@@ -998,7 +998,7 @@ func applyFixes(basePath string, matches []scanMatch) error {
 
 	for relPath, fileMatches := range byFile {
 		fullPath := filepath.Join(basePath, relPath)
-		data, err := os.ReadFile(fullPath)
+		data, err := os.ReadFile(fullPath) //nolint:gosec // intentional: certPath is derived from user home directory
 		if err != nil {
 			fmt.Printf("  ✗ Could not read %s: %v\n", relPath, err)
 			continue
@@ -1084,10 +1084,10 @@ func serviceInstallCmd() *cobra.Command {
   <key>StandardErrorPath</key><string>` + logPath + `</string>
 </dict>
 </plist>`
-				if err := os.WriteFile(plistPath, []byte(plist), 0600); err != nil {
+				if err := os.WriteFile(plistPath, []byte(plist), 0600); err != nil { //nolint:gosec // intentional: path is derived from user home directory
 					return fmt.Errorf("could not write plist: %w", err)
 				}
-				_ = exec.Command("launchctl", "unload", plistPath).Run() //nolint:gosec // intentional: manages launchd service
+				_ = exec.Command("launchctl", "unload", plistPath).Run()                   //nolint:gosec // intentional: manages launchd service
 				if err := exec.Command("launchctl", "load", plistPath).Run(); err != nil { //nolint:gosec // intentional: manages launchd service
 					return fmt.Errorf("launchctl load failed: %w", err)
 				}
@@ -1102,7 +1102,7 @@ func serviceInstallCmd() *cobra.Command {
 					"[Service]\nExecStart=" + binaryPath + " start --config " + configPath + "\n" +
 					"Restart=always\nRestartSec=3\n\n[Install]\nWantedBy=default.target\n"
 				svcPath := filepath.Join(svcDir, "ghostkey.service")
-				if err := os.WriteFile(svcPath, []byte(unit), 0600); err != nil {
+				if err := os.WriteFile(svcPath, []byte(unit), 0600); err != nil { //nolint:gosec // intentional: path is derived from user home directory
 					return fmt.Errorf("could not write service file: %w", err)
 				}
 				_ = exec.Command("systemctl", "--user", "enable", "ghostkey").Run()
@@ -1131,7 +1131,7 @@ func serviceUninstallCmd() *cobra.Command {
 			switch runtime.GOOS {
 			case "darwin":
 				plistPath := filepath.Join(home, "Library", "LaunchAgents", "sh.ghostkey.plist")
-				_ = exec.Command("launchctl", "unload", plistPath).Run()
+				_ = exec.Command("launchctl", "unload", plistPath).Run() //nolint:gosec // intentional: manages launchd service
 				if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
 					return err
 				}
@@ -1203,7 +1203,7 @@ func serviceLogsCmd() *cobra.Command {
 				}
 				fallthrough
 			default:
-				tailCmd = exec.Command("tail", "-f", logPath)
+				tailCmd = exec.Command("tail", "-f", logPath) //nolint:gosec // intentional: logPath is derived from config
 				tailCmd.Stdout = os.Stdout
 				tailCmd.Stderr = os.Stderr
 				return tailCmd.Run()
@@ -1258,7 +1258,7 @@ func buildVault(cfg *config.Config, logger *zap.Logger) (vault.Vault, func(), er
 
 // appendToSecretsFile merges a new ghost→real mapping into an existing secrets file.
 func appendToSecretsFile(path, ghost, real string) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // intentional: certPath is derived from user home directory
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("vault: read secrets file: %w", err)
 	}

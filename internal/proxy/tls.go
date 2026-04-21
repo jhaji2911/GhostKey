@@ -54,11 +54,11 @@ func NewCAManager(certFile, keyFile string) (*CAManager, error) {
 }
 
 func loadCA(certFile, keyFile string) (*CAManager, error) {
-	certPEM, err := os.ReadFile(certFile)
+	certPEM, err := os.ReadFile(certFile) //nolint:gosec // intentional: certFile is from validated config
 	if err != nil {
 		return nil, fmt.Errorf("tls: read CA cert %q: %w", certFile, err)
 	}
-	keyPEM, err := os.ReadFile(keyFile)
+	keyPEM, err := os.ReadFile(keyFile) //nolint:gosec // intentional: keyFile is from validated config
 	if err != nil {
 		return nil, fmt.Errorf("tls: read CA key %q: %w", keyFile, err)
 	}

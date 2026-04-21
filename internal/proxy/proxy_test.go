@@ -133,7 +133,7 @@ func TestEndToEndHTTPSInterception(t *testing.T) {
 
 	// Flush and read audit log
 	_ = a.Close()
-	logBytes, readErr := os.ReadFile(auditPath)
+	logBytes, readErr := os.ReadFile(auditPath) //nolint:gosec // intentional: auditPath is a temp file created by the test
 	if readErr != nil {
 		t.Fatalf("read audit log: %v", readErr)
 	}
