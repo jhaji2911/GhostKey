@@ -1,9 +1,4 @@
 run:
-  # Tell golangci-lint to target Go 1.22 syntax/semantics.
-  # This overrides the `go` directive in go.mod (which may be bumped higher
-  # by `go mod tidy` when newer x/ packages are in the graph) and prevents
-  # golangci-lint from refusing to run because go.mod > its own build version.
-  go: "1.22"
   timeout: 5m
 
 linters:
