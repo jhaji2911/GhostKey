@@ -200,15 +200,18 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Audit BEFORE writing the response to the client so the log entry is
+		// durable by the time client.Do() returns (avoids a race in tests and
+		// ensures events are recorded even if the write-back fails).
+		all := append(reqEvts, respEvts...)
+		p.emitAudit(req, host, all)
+
 		if writeErr := resp.Write(agentTLS); writeErr != nil {
 			p.logger.Debug("proxy: write agent", zap.Error(writeErr))
 			_ = resp.Body.Close()
 			return
 		}
 		_ = resp.Body.Close()
-
-		all := append(reqEvts, respEvts...)
-		p.emitAudit(req, host, all)
 	}
 }
 
