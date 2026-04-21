@@ -1,4 +1,4 @@
-module github.com/jhaji2911/GhostKey
+module github.com/jhaji2911/ghostkey
 
 go 1.25.0
 

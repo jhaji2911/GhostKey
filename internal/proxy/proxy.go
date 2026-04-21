@@ -30,9 +30,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/jhaji2911/GhostKey/internal/audit"
-	"github.com/jhaji2911/GhostKey/internal/config"
-	"github.com/jhaji2911/GhostKey/internal/vault"
+	"github.com/jhaji2911/ghostkey/internal/audit"
+	"github.com/jhaji2911/ghostkey/internal/config"
+	"github.com/jhaji2911/ghostkey/internal/vault"
 )
 
 // Proxy is the core GhostKey MITM proxy server.

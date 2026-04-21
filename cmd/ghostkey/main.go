@@ -23,10 +23,10 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/term"
 
-	"github.com/jhaji2911/GhostKey/internal/audit"
-	"github.com/jhaji2911/GhostKey/internal/config"
-	"github.com/jhaji2911/GhostKey/internal/proxy"
-	"github.com/jhaji2911/GhostKey/internal/vault"
+	"github.com/jhaji2911/ghostkey/internal/audit"
+	"github.com/jhaji2911/ghostkey/internal/config"
+	"github.com/jhaji2911/ghostkey/internal/proxy"
+	"github.com/jhaji2911/ghostkey/internal/vault"
 )
 
 // Version is injected by the build system via -ldflags.

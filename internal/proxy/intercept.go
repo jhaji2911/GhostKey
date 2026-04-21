@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/jhaji2911/GhostKey/internal/vault"
+	"github.com/jhaji2911/ghostkey/internal/vault"
 )
 
 // maxBodyInspectSize is the maximum body size that will be inspected for ghost tokens.
