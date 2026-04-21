@@ -30,19 +30,20 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/yourusername/ghostkey/internal/audit"
-	"github.com/yourusername/ghostkey/internal/config"
-	"github.com/yourusername/ghostkey/internal/vault"
+	"github.com/jhaji2911/GhostKey/internal/audit"
+	"github.com/jhaji2911/GhostKey/internal/config"
+	"github.com/jhaji2911/GhostKey/internal/vault"
 )
 
 // Proxy is the core GhostKey MITM proxy server.
 type Proxy struct {
-	cfg     *config.Config
-	vault   vault.Vault
-	ca      *CAManager
-	auditor *audit.Auditor
-	logger  *zap.Logger
-	server  *http.Server
+	cfg              *config.Config
+	vault            vault.Vault
+	ca               *CAManager
+	auditor          *audit.Auditor
+	logger           *zap.Logger
+	server           *http.Server
+	upstreamTLSConf  *tls.Config // nil uses system defaults; override in tests
 }
 
 // New creates a Proxy with the given dependencies.
@@ -115,12 +116,18 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 
 	// Send 200 before hijacking — this is the CONNECT tunnel established signal.
 	w.WriteHeader(http.StatusOK)
-	conn, _, err := hijacker.Hijack()
+	conn, brw, err := hijacker.Hijack()
 	if err != nil {
 		p.logger.Error("proxy: hijack", zap.String("host", host), zap.Error(err))
 		return
 	}
 	defer conn.Close()
+	// Flush any bytes buffered by the ResponseWriter (the 200 status line)
+	// before we hand the raw conn to the TLS layer.
+	if err := brw.Flush(); err != nil {
+		p.logger.Error("proxy: flush hijack buffer", zap.Error(err))
+		return
+	}
 
 	// Get a short-lived leaf cert for this hostname.
 	leafCert, err := p.ca.CertForHost(hostWithoutPort(host))
@@ -141,10 +148,15 @@ func (p *Proxy) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	defer agentTLS.Close()
 
 	// Server-side TLS: GhostKey connects to the real upstream.
-	upstream, err := tls.Dial("tcp", ensureDefaultPort(host, "443"), &tls.Config{
+	upConf := &tls.Config{
 		ServerName: hostWithoutPort(host),
 		MinVersion: tls.VersionTLS12,
-	})
+	}
+	if p.upstreamTLSConf != nil {
+		upConf.InsecureSkipVerify = p.upstreamTLSConf.InsecureSkipVerify //nolint:gosec
+		upConf.RootCAs = p.upstreamTLSConf.RootCAs
+	}
+	upstream, err := tls.Dial("tcp", ensureDefaultPort(host, "443"), upConf)
 	if err != nil {
 		p.logger.Error("proxy: upstream dial", zap.String("host", host), zap.Error(err))
 		return
