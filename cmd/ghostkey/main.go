@@ -43,6 +43,10 @@ func rootCmd() *cobra.Command {
 		Use:   "ghostkey",
 		Short: "Credential firewall for AI agents",
 		Long:  "GhostKey ensures AI agents never possess real credentials.\nAgents send the ghost. Servers get the key.",
+		Run: func(cmd *cobra.Command, args []string) {
+			printIntro()
+			_ = cmd.Help()
+		},
 	}
 	root.AddCommand(
 		startCmd(),
@@ -57,6 +61,20 @@ func rootCmd() *cobra.Command {
 		versionCmd(),
 	)
 	return root
+}
+
+func printIntro() {
+	ghost := `
+   ▄▄▄▄▄▄▄
+  █████████
+  ██▀███▀██
+  █████████
+  ▀█▀ ▀ ▀█▀
+`
+	fmt.Printf("\033[36m%s\033[0m", ghost)
+	fmt.Printf("  \033[1;36mGhostKey\033[0m %s\n", Version)
+	fmt.Println("  Credential firewall for AI agents.")
+	fmt.Println()
 }
 
 // ----------------------------------------------------------------------------
@@ -95,7 +113,7 @@ func startCmd() *cobra.Command {
 
 			// First-run experience: no vault entries yet
 			if len(v.ListGhosts()) == 0 {
-				fmt.Printf("\n  👻 GhostKey %s\n\n", Version)
+				printIntro()
 				fmt.Println("  First time running? Let's get you set up.")
 				fmt.Println()
 				fmt.Println("  1. Add a credential:")
@@ -366,11 +384,30 @@ func vaultListCmd(cfgFile *string) *cobra.Command {
 
 func vaultAddCmd(cfgFile *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "add <ghost-token>",
+		Use:   "add [ghost-token]",
 		Short: "Add a ghost→real mapping (interactive secure prompt, token never in shell history)",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ghost := args[0]
+			var ghost string
+			if len(args) > 0 {
+				ghost = args[0]
+			} else {
+				fmt.Print("\n  Enter ghost token name (e.g. GHOST::openai): ")
+				reader := bufio.NewReader(os.Stdin)
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					return fmt.Errorf("could not read input: %w", err)
+				}
+				ghost = strings.TrimSpace(input)
+				if ghost == "" {
+					return fmt.Errorf("ghost token cannot be empty")
+				}
+			}
+
+			if !strings.HasPrefix(ghost, "GHOST::") {
+				ghost = "GHOST::" + ghost
+			}
+
 			if err := vault.ValidateGhostToken(ghost); err != nil {
 				return err
 			}
@@ -423,11 +460,10 @@ func vaultAddCmd(cfgFile *string) *cobra.Command {
 
 func vaultRevokeCmd(cfgFile *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "revoke <ghost-token>",
+		Use:   "revoke [ghost-token]",
 		Short: "Remove a ghost token mapping",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ghost := args[0]
 			cfg, err := config.Load(*cfgFile)
 			if err != nil {
 				return err
@@ -438,6 +474,47 @@ func vaultRevokeCmd(cfgFile *string) *cobra.Command {
 				return err
 			}
 			defer closeFn()
+
+			var ghost string
+			if len(args) > 0 {
+				ghost = args[0]
+			} else {
+				ghosts := v.ListGhosts()
+				if len(ghosts) == 0 {
+					fmt.Println("  (no ghost tokens registered)")
+					return nil
+				}
+				fmt.Println("\n  Registered ghost tokens:")
+				for i, g := range ghosts {
+					fmt.Printf("    [%d] %s\n", i+1, g)
+				}
+				fmt.Print("\n  Select token to revoke (number) or name: ")
+				reader := bufio.NewReader(os.Stdin)
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					return fmt.Errorf("could not read input: %w", err)
+				}
+				input = strings.TrimSpace(input)
+				if input == "" {
+					return nil // cancel
+				}
+
+				// check if numeric selection
+				var selectedIndex int
+				if n, err := fmt.Sscanf(input, "%d", &selectedIndex); err == nil && n == 1 {
+					if selectedIndex >= 1 && selectedIndex <= len(ghosts) {
+						ghost = ghosts[selectedIndex-1]
+					} else {
+						return fmt.Errorf("invalid selection")
+					}
+				} else {
+					ghost = input
+					if !strings.HasPrefix(ghost, "GHOST::") {
+						ghost = "GHOST::" + ghost
+					}
+				}
+			}
+
 			v.Revoke(ghost)
 			fmt.Printf("Revoked %s\n", ghost)
 			return nil
