@@ -101,7 +101,18 @@ func printIntro(commandPath string) {
 func introFlavorFor(commandPath string) introFlavor {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(commandPath))
-	return introFlavors[h.Sum32()%uint32(len(introFlavors))]
+	switch h.Sum32() % 5 {
+	case 0:
+		return introFlavors[0]
+	case 1:
+		return introFlavors[1]
+	case 2:
+		return introFlavors[2]
+	case 3:
+		return introFlavors[3]
+	default:
+		return introFlavors[4]
+	}
 }
 
 const defaultConfigTemplate = `proxy:
@@ -124,7 +135,7 @@ ca:
   key_file: ""
 `
 
-const defaultSecretsTemplate = `# secrets.yaml — keep this file out of git
+const defaultVaultMappingsTemplate = `# secrets.yaml — keep this file out of git
 mappings: {}
 `
 
@@ -145,16 +156,14 @@ type secretsFile struct {
 // ----------------------------------------------------------------------------
 
 func initCmd() *cobra.Command {
-	var dir string
 	var force bool
 	var generateCA bool
-	var projectMode bool
 
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Bootstrap GhostKey config, secrets, and safety defaults",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			targetDir, err := resolveInitDir(dir, projectMode)
+			targetDir, err := defaultGhostKeyDir()
 			if err != nil {
 				return err
 			}
@@ -172,10 +181,7 @@ func initCmd() *cobra.Command {
 			if err := writeBootstrapFile(configPath, defaultConfigTemplate, force); err != nil {
 				return err
 			}
-			if err := writeBootstrapFile(secretsPath, defaultSecretsTemplate, force); err != nil {
-				return err
-			}
-			if err := ensureGitignoreEntries(absDir, []string{"secrets.yaml", "ghostkey-audit.ndjson"}); err != nil {
+			if err := writeBootstrapFile(secretsPath, defaultVaultMappingsTemplate, force); err != nil {
 				return err
 			}
 			if generateCA {
@@ -186,7 +192,6 @@ func initCmd() *cobra.Command {
 
 			fmt.Printf("  ✓ Wrote %s\n", configPath)
 			fmt.Printf("  ✓ Wrote %s\n", secretsPath)
-			fmt.Printf("  ✓ Updated %s\n", filepath.Join(absDir, ".gitignore"))
 			if generateCA {
 				fmt.Println("  ✓ Generated local GhostKey CA")
 			}
@@ -199,10 +204,8 @@ func initCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&dir, "dir", "", "Directory to initialize (default: ~/.ghostkey, or current directory with --project)")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing ghostkey.yaml and secrets.yaml")
 	cmd.Flags().BoolVar(&generateCA, "ca", true, "Generate the local GhostKey CA during init")
-	cmd.Flags().BoolVar(&projectMode, "project", false, "Initialize GhostKey files in current project directory instead of ~/.ghostkey")
 	return cmd
 }
 
@@ -1515,43 +1518,12 @@ func writeBootstrapFile(path, content string, force bool) error {
 	return os.WriteFile(path, []byte(content), 0600)
 }
 
-func resolveInitDir(dir string, projectMode bool) (string, error) {
-	if dir != "" {
-		return dir, nil
-	}
-	if projectMode {
-		return ".", nil
-	}
+func defaultGhostKeyDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(home, ".ghostkey"), nil
-}
-
-func ensureGitignoreEntries(dir string, entries []string) error {
-	path := filepath.Join(dir, ".gitignore")
-	existingBytes, err := os.ReadFile(path) //nolint:gosec // path is derived from the working directory
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	existing := strings.Split(strings.ReplaceAll(string(existingBytes), "\r\n", "\n"), "\n")
-	seen := make(map[string]bool, len(existing))
-	for _, line := range existing {
-		seen[strings.TrimSpace(line)] = true
-	}
-	for _, entry := range entries {
-		if !seen[entry] {
-			existing = append(existing, entry)
-		}
-	}
-
-	content := strings.TrimSpace(strings.Join(existing, "\n"))
-	if content != "" {
-		content += "\n"
-	}
-	return os.WriteFile(path, []byte(content), 0644)
 }
 
 func parseWrapEnvMappings(mappings []string) ([]string, error) {

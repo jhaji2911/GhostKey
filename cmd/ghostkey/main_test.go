@@ -1,10 +1,8 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -98,62 +96,16 @@ func TestSecretsFileUpsertAndRemove(t *testing.T) {
 	}
 }
 
-func TestEnsureGitignoreEntries(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, ".gitignore")
-	if err := os.WriteFile(path, []byte("node_modules\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := ensureGitignoreEntries(dir, []string{"secrets.yaml", "ghostkey-audit.ndjson", "node_modules"}); err != nil {
-		t.Fatalf("ensureGitignoreEntries(): %v", err)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	content := string(data)
-	for _, want := range []string{"node_modules", "secrets.yaml", "ghostkey-audit.ndjson"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf(".gitignore missing %q: %q", want, content)
-		}
-	}
-	if strings.Count(content, "node_modules") != 1 {
-		t.Fatalf(".gitignore duplicated entries: %q", content)
-	}
-}
-
-func TestResolveInitDirProjectMode(t *testing.T) {
-	got, err := resolveInitDir("", true)
-	if err != nil {
-		t.Fatalf("resolveInitDir(project): %v", err)
-	}
-	if got != "." {
-		t.Fatalf("resolveInitDir(project) = %q, want %q", got, ".")
-	}
-}
-
-func TestResolveInitDirExplicitDirWins(t *testing.T) {
-	got, err := resolveInitDir("/tmp/ghostkey", true)
-	if err != nil {
-		t.Fatalf("resolveInitDir(explicit): %v", err)
-	}
-	if got != "/tmp/ghostkey" {
-		t.Fatalf("resolveInitDir(explicit) = %q", got)
-	}
-}
-
-func TestResolveInitDirDefaultsToUserSpace(t *testing.T) {
+func TestDefaultGhostKeyDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	got, err := resolveInitDir("", false)
+	got, err := defaultGhostKeyDir()
 	if err != nil {
-		t.Fatalf("resolveInitDir(default): %v", err)
+		t.Fatalf("defaultGhostKeyDir(): %v", err)
 	}
 	want := filepath.Join(home, ".ghostkey")
 	if got != want {
-		t.Fatalf("resolveInitDir(default) = %q, want %q", got, want)
+		t.Fatalf("defaultGhostKeyDir() = %q, want %q", got, want)
 	}
 }
