@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -100,5 +101,25 @@ func Load(cfgFile string) (*Config, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("config: unmarshal: %w", err)
 	}
+	resolveRelativePaths(&cfg, v.ConfigFileUsed())
 	return &cfg, nil
+}
+
+func resolveRelativePaths(cfg *Config, configPath string) {
+	if configPath == "" {
+		return
+	}
+
+	baseDir := filepath.Dir(configPath)
+	cfg.Vault.FilePath = resolvePath(baseDir, cfg.Vault.FilePath)
+	cfg.Audit.FilePath = resolvePath(baseDir, cfg.Audit.FilePath)
+	cfg.CA.CertFile = resolvePath(baseDir, cfg.CA.CertFile)
+	cfg.CA.KeyFile = resolvePath(baseDir, cfg.CA.KeyFile)
+}
+
+func resolvePath(baseDir, path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(baseDir, path)
 }

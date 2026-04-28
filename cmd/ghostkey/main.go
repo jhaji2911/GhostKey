@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"hash/fnv"
 	"net"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"golang.org/x/term"
+	"gopkg.in/yaml.v3"
 
 	"github.com/jhaji2911/ghostkey/internal/audit"
 	"github.com/jhaji2911/ghostkey/internal/config"
@@ -40,11 +43,19 @@ func main() {
 
 func rootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "ghostkey",
-		Short: "Credential firewall for AI agents",
-		Long:  "GhostKey ensures AI agents never possess real credentials.\nAgents send the ghost. Servers get the key.",
+		Use:              "ghostkey",
+		Short:            "Credential firewall for AI agents",
+		Long:             "GhostKey ensures AI agents never possess real credentials.\nAgents send the ghost. Servers get the key.",
+		TraverseChildren: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			printIntro(cmd.CommandPath())
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = cmd.Help()
+		},
 	}
 	root.AddCommand(
+		initCmd(),
 		startCmd(),
 		wrapCmd(),
 		caCmd(),
@@ -57,6 +68,142 @@ func rootCmd() *cobra.Command {
 		versionCmd(),
 	)
 	return root
+}
+
+type introFlavor struct {
+	Label string
+}
+
+var introFlavors = []introFlavor{
+	{Label: "Specter"},
+	{Label: "Phantom"},
+	{Label: "Poltergeist"},
+	{Label: "Wisp"},
+	{Label: "Mist"},
+}
+
+func printIntro(commandPath string) {
+	ghost := `
+   ▄▄▄▄▄▄▄
+  █████████
+  ██▀███▀██
+  █████████
+  ▀█▀ ▀ ▀█▀
+`
+	flavor := introFlavorFor(commandPath)
+	fmt.Printf("\033[36m%s\033[0m", ghost)
+	fmt.Printf("  \033[1;36mGhostKey\033[0m %s\n", Version)
+	fmt.Printf("  %s mode: %s\n", flavor.Label, commandPath)
+	fmt.Println("  Credential firewall for AI agents.")
+	fmt.Println()
+}
+
+func introFlavorFor(commandPath string) introFlavor {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(commandPath))
+	return introFlavors[h.Sum32()%uint32(len(introFlavors))]
+}
+
+const defaultConfigTemplate = `proxy:
+  listen_addr: "127.0.0.1:9876"
+  read_timeout: 30
+  write_timeout: 30
+
+vault:
+  backend: file
+  file_path: "./secrets.yaml"
+  watch_file: true
+
+audit:
+  enabled: true
+  file_path: "./ghostkey-audit.ndjson"
+  format: json
+
+ca:
+  cert_file: ""
+  key_file: ""
+`
+
+const defaultSecretsTemplate = `# secrets.yaml — keep this file out of git
+mappings: {}
+`
+
+var providerEnvVars = map[string][]string{
+	"openai":      {"OPENAI_API_KEY"},
+	"anthropic":   {"ANTHROPIC_API_KEY"},
+	"github":      {"GITHUB_TOKEN"},
+	"huggingface": {"HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN"},
+	"stripe":      {"STRIPE_API_KEY"},
+}
+
+type secretsFile struct {
+	Mappings map[string]string `yaml:"mappings"`
+}
+
+// ----------------------------------------------------------------------------
+// ghostkey init
+// ----------------------------------------------------------------------------
+
+func initCmd() *cobra.Command {
+	var dir string
+	var force bool
+	var generateCA bool
+	var projectMode bool
+
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Bootstrap GhostKey config, secrets, and safety defaults",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetDir, err := resolveInitDir(dir, projectMode)
+			if err != nil {
+				return err
+			}
+			absDir, err := filepath.Abs(targetDir)
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(absDir, 0750); err != nil {
+				return err
+			}
+
+			configPath := filepath.Join(absDir, "ghostkey.yaml")
+			secretsPath := filepath.Join(absDir, "secrets.yaml")
+
+			if err := writeBootstrapFile(configPath, defaultConfigTemplate, force); err != nil {
+				return err
+			}
+			if err := writeBootstrapFile(secretsPath, defaultSecretsTemplate, force); err != nil {
+				return err
+			}
+			if err := ensureGitignoreEntries(absDir, []string{"secrets.yaml", "ghostkey-audit.ndjson"}); err != nil {
+				return err
+			}
+			if generateCA {
+				if _, err := proxy.NewCAManager("", ""); err != nil {
+					return fmt.Errorf("generate CA: %w", err)
+				}
+			}
+
+			fmt.Printf("  ✓ Wrote %s\n", configPath)
+			fmt.Printf("  ✓ Wrote %s\n", secretsPath)
+			fmt.Printf("  ✓ Updated %s\n", filepath.Join(absDir, ".gitignore"))
+			if generateCA {
+				fmt.Println("  ✓ Generated local GhostKey CA")
+			}
+			fmt.Println()
+			fmt.Println("  Next steps:")
+			fmt.Printf("    ghostkey ca install\n")
+			fmt.Printf("    ghostkey vault add -c %s GHOST::openai\n", configPath)
+			fmt.Printf("    ghostkey start -c %s\n", configPath)
+			fmt.Println()
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "", "Directory to initialize (default: ~/.ghostkey, or current directory with --project)")
+	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing ghostkey.yaml and secrets.yaml")
+	cmd.Flags().BoolVar(&generateCA, "ca", true, "Generate the local GhostKey CA during init")
+	cmd.Flags().BoolVar(&projectMode, "project", false, "Initialize GhostKey files in current project directory instead of ~/.ghostkey")
+	return cmd
 }
 
 // ----------------------------------------------------------------------------
@@ -95,7 +242,6 @@ func startCmd() *cobra.Command {
 
 			// First-run experience: no vault entries yet
 			if len(v.ListGhosts()) == 0 {
-				fmt.Printf("\n  👻 GhostKey %s\n\n", Version)
 				fmt.Println("  First time running? Let's get you set up.")
 				fmt.Println()
 				fmt.Println("  1. Add a credential:")
@@ -366,11 +512,30 @@ func vaultListCmd(cfgFile *string) *cobra.Command {
 
 func vaultAddCmd(cfgFile *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "add <ghost-token>",
+		Use:   "add [ghost-token]",
 		Short: "Add a ghost→real mapping (interactive secure prompt, token never in shell history)",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ghost := args[0]
+			var ghost string
+			if len(args) > 0 {
+				ghost = args[0]
+			} else {
+				fmt.Print("\n  Enter ghost token name (e.g. GHOST::openai): ")
+				reader := bufio.NewReader(os.Stdin)
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					return fmt.Errorf("could not read input: %w", err)
+				}
+				ghost = strings.TrimSpace(input)
+				if ghost == "" {
+					return fmt.Errorf("ghost token cannot be empty")
+				}
+			}
+
+			if !strings.HasPrefix(ghost, "GHOST::") {
+				ghost = "GHOST::" + ghost
+			}
+
 			if err := vault.ValidateGhostToken(ghost); err != nil {
 				return err
 			}
@@ -404,7 +569,7 @@ func vaultAddCmd(cfgFile *string) *cobra.Command {
 
 			// Write to secrets file if using file backend
 			if cfg.Vault.Backend == "file" && cfg.Vault.FilePath != "" {
-				if err := appendToSecretsFile(cfg.Vault.FilePath, ghost, real); err != nil {
+				if err := upsertSecretsFileMapping(cfg.Vault.FilePath, ghost, real); err != nil {
 					return err
 				}
 			} else {
@@ -423,11 +588,10 @@ func vaultAddCmd(cfgFile *string) *cobra.Command {
 
 func vaultRevokeCmd(cfgFile *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "revoke <ghost-token>",
+		Use:   "revoke [ghost-token]",
 		Short: "Remove a ghost token mapping",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ghost := args[0]
 			cfg, err := config.Load(*cfgFile)
 			if err != nil {
 				return err
@@ -438,6 +602,60 @@ func vaultRevokeCmd(cfgFile *string) *cobra.Command {
 				return err
 			}
 			defer closeFn()
+
+			var ghost string
+			if len(args) > 0 {
+				ghost = args[0]
+			} else {
+				ghosts := v.ListGhosts()
+				if len(ghosts) == 0 {
+					fmt.Println("  (no ghost tokens registered)")
+					return nil
+				}
+				fmt.Println("\n  Registered ghost tokens:")
+				for i, g := range ghosts {
+					fmt.Printf("    [%d] %s\n", i+1, g)
+				}
+				fmt.Print("\n  Select token to revoke (number) or name: ")
+				reader := bufio.NewReader(os.Stdin)
+				input, err := reader.ReadString('\n')
+				if err != nil {
+					return fmt.Errorf("could not read input: %w", err)
+				}
+				input = strings.TrimSpace(input)
+				if input == "" {
+					return nil // cancel
+				}
+
+				// check if numeric selection
+				var selectedIndex int
+				if n, err := fmt.Sscanf(input, "%d", &selectedIndex); err == nil && n == 1 {
+					if selectedIndex >= 1 && selectedIndex <= len(ghosts) {
+						ghost = ghosts[selectedIndex-1]
+					} else {
+						return fmt.Errorf("invalid selection")
+					}
+				} else {
+					ghost = input
+					if !strings.HasPrefix(ghost, "GHOST::") {
+						ghost = "GHOST::" + ghost
+					}
+				}
+			}
+
+			if cfg.Vault.Backend == "file" && cfg.Vault.FilePath != "" {
+				removed, err := removeSecretsFileMapping(cfg.Vault.FilePath, ghost)
+				if err != nil {
+					return err
+				}
+				if !removed {
+					fmt.Printf("No mapping found for %s in %s\n", ghost, cfg.Vault.FilePath)
+					return nil
+				}
+				fmt.Printf("Revoked %s\n", ghost)
+				return nil
+			}
+
 			v.Revoke(ghost)
 			fmt.Printf("Revoked %s\n", ghost)
 			return nil
@@ -605,6 +823,9 @@ func versionCmd() *cobra.Command {
 
 func wrapCmd() *cobra.Command {
 	var port int
+	var cfgFile string
+	var envMappings []string
+	var autoEnv bool
 	cmd := &cobra.Command{
 		Use:   "wrap -- <command> [args...]",
 		Short: "Run a command with proxy env vars injected (agent never touches system proxy)",
@@ -632,15 +853,38 @@ Examples:
 			}
 			_ = conn.Close()
 
-			proc := exec.Command(args[0], args[1:]...) //nolint:gosec // intentional: wraps arbitrary user command with proxy env vars
-			proc.Env = append(os.Environ(),
-				"HTTPS_PROXY="+proxyURL,
-				"HTTP_PROXY="+proxyURL,
-				"https_proxy="+proxyURL,
-				"http_proxy="+proxyURL,
+			assignments := []string{
+				"HTTPS_PROXY=" + proxyURL,
+				"HTTP_PROXY=" + proxyURL,
+				"https_proxy=" + proxyURL,
+				"http_proxy=" + proxyURL,
 				"NO_PROXY=localhost,127.0.0.1,::1",
 				"no_proxy=localhost,127.0.0.1,::1",
-			)
+			}
+
+			existingEnv := envSliceToMap(os.Environ())
+			if autoEnv || len(envMappings) > 0 {
+				cfg, err := config.Load(cfgFile)
+				if err == nil {
+					logger := zap.NewNop()
+					v, closeFn, vaultErr := buildVault(cfg, logger)
+					if vaultErr == nil {
+						defer closeFn()
+						if autoEnv {
+							assignments = append(assignments, inferGhostEnvAssignments(v.ListGhosts(), existingEnv)...)
+						}
+					}
+				}
+			}
+
+			explicitAssignments, err := parseWrapEnvMappings(envMappings)
+			if err != nil {
+				return err
+			}
+			assignments = append(assignments, explicitAssignments...)
+
+			proc := exec.Command(args[0], args[1:]...) //nolint:gosec // intentional: wraps arbitrary user command with proxy env vars
+			proc.Env = mergeEnvAssignments(os.Environ(), assignments)
 			proc.Stdin = os.Stdin
 			proc.Stdout = os.Stdout
 			proc.Stderr = os.Stderr
@@ -648,6 +892,9 @@ Examples:
 		},
 	}
 	cmd.Flags().IntVar(&port, "port", 9876, "GhostKey proxy port")
+	cmd.Flags().StringVarP(&cfgFile, "config", "c", "", "Config file used to infer ghost-token env vars")
+	cmd.Flags().StringArrayVar(&envMappings, "env", nil, "Explicit env assignment in KEY=GHOST::token form")
+	cmd.Flags().BoolVar(&autoEnv, "auto-env", true, "Infer common provider env vars from configured ghost tokens")
 	return cmd
 }
 
@@ -1256,28 +1503,210 @@ func buildVault(cfg *config.Config, logger *zap.Logger) (vault.Vault, func(), er
 	}
 }
 
-// appendToSecretsFile merges a new ghost→real mapping into an existing secrets file.
-func appendToSecretsFile(path, ghost, real string) error {
-	data, err := os.ReadFile(path) //nolint:gosec // intentional: certPath is derived from user home directory
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("vault: read secrets file: %w", err)
+func writeBootstrapFile(path, content string, force bool) error {
+	if !force {
+		if _, err := os.Stat(path); err == nil {
+			return fmt.Errorf("%s already exists (use --force to overwrite)", path)
+		}
 	}
-	content := string(data)
-	if !strings.Contains(content, "mappings:") {
-		content = "mappings:\n" + content
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+		return err
 	}
-	line := fmt.Sprintf("  %q: %q\n", ghost, real)
-	content += line
+	return os.WriteFile(path, []byte(content), 0600)
+}
 
+func resolveInitDir(dir string, projectMode bool) (string, error) {
+	if dir != "" {
+		return dir, nil
+	}
+	if projectMode {
+		return ".", nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".ghostkey"), nil
+}
+
+func ensureGitignoreEntries(dir string, entries []string) error {
+	path := filepath.Join(dir, ".gitignore")
+	existingBytes, err := os.ReadFile(path) //nolint:gosec // path is derived from the working directory
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	existing := strings.Split(strings.ReplaceAll(string(existingBytes), "\r\n", "\n"), "\n")
+	seen := make(map[string]bool, len(existing))
+	for _, line := range existing {
+		seen[strings.TrimSpace(line)] = true
+	}
+	for _, entry := range entries {
+		if !seen[entry] {
+			existing = append(existing, entry)
+		}
+	}
+
+	content := strings.TrimSpace(strings.Join(existing, "\n"))
+	if content != "" {
+		content += "\n"
+	}
+	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func parseWrapEnvMappings(mappings []string) ([]string, error) {
+	assignments := make([]string, 0, len(mappings))
+	for _, mapping := range mappings {
+		key, val, ok := strings.Cut(mapping, "=")
+		if !ok || strings.TrimSpace(key) == "" || strings.TrimSpace(val) == "" {
+			return nil, fmt.Errorf("invalid --env %q: expected KEY=GHOST::token", mapping)
+		}
+		if err := vault.ValidateGhostToken(strings.TrimSpace(val)); err != nil {
+			return nil, err
+		}
+		assignments = append(assignments, strings.TrimSpace(key)+"="+strings.TrimSpace(val))
+	}
+	return assignments, nil
+}
+
+func inferGhostEnvAssignments(ghosts []string, existing map[string]string) []string {
+	if len(ghosts) == 0 {
+		return nil
+	}
+
+	sortedGhosts := append([]string(nil), ghosts...)
+	sort.Strings(sortedGhosts)
+
+	assignments := make([]string, 0, len(sortedGhosts))
+	assigned := make(map[string]bool)
+	for _, ghost := range sortedGhosts {
+		provider := inferProviderFromGhost(ghost)
+		envVars := providerEnvVars[provider]
+		for _, envVar := range envVars {
+			if existing[envVar] != "" || assigned[envVar] {
+				continue
+			}
+			assignments = append(assignments, envVar+"="+ghost)
+			assigned[envVar] = true
+			break
+		}
+	}
+	return assignments
+}
+
+func inferProviderFromGhost(ghost string) string {
+	name := strings.ToLower(strings.TrimPrefix(ghost, "GHOST::"))
+	for _, sep := range []string{"-", "_"} {
+		if idx := strings.Index(name, sep); idx > 0 {
+			name = name[:idx]
+			break
+		}
+	}
+	return name
+}
+
+func envSliceToMap(env []string) map[string]string {
+	out := make(map[string]string, len(env))
+	for _, kv := range env {
+		key, val, ok := strings.Cut(kv, "=")
+		if ok {
+			out[key] = val
+		}
+	}
+	return out
+}
+
+func mergeEnvAssignments(base, assignments []string) []string {
+	merged := envSliceToMap(base)
+	order := make([]string, 0, len(merged))
+	seen := make(map[string]bool, len(merged))
+	for _, kv := range base {
+		key, _, ok := strings.Cut(kv, "=")
+		if ok && !seen[key] {
+			order = append(order, key)
+			seen[key] = true
+		}
+	}
+	for _, kv := range assignments {
+		key, val, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		if !seen[key] {
+			order = append(order, key)
+			seen[key] = true
+		}
+		merged[key] = val
+	}
+	out := make([]string, 0, len(order))
+	for _, key := range order {
+		out = append(out, key+"="+merged[key])
+	}
+	return out
+}
+
+func loadSecretsFile(path string) (*secretsFile, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // path comes from config or CLI-controlled workspace files
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &secretsFile{Mappings: map[string]string{}}, nil
+		}
+		return nil, fmt.Errorf("vault: read secrets file: %w", err)
+	}
+	var sf secretsFile
+	if err := yaml.Unmarshal(data, &sf); err != nil {
+		return nil, fmt.Errorf("vault: parse secrets file: %w", err)
+	}
+	if sf.Mappings == nil {
+		sf.Mappings = map[string]string{}
+	}
+	return &sf, nil
+}
+
+func writeSecretsFile(path string, sf *secretsFile) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(sf)
+	if err != nil {
+		return fmt.Errorf("vault: marshal secrets file: %w", err)
+	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0600); err != nil { //nolint:gosec // tmp path is derived from the validated config path
+	if err := os.WriteFile(tmp, data, 0600); err != nil { //nolint:gosec // tmp path is derived from config
 		return fmt.Errorf("vault: write secrets file: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("vault: rename secrets file: %w", err)
 	}
+	return nil
+}
+
+func upsertSecretsFileMapping(path, ghost, real string) error {
+	sf, err := loadSecretsFile(path)
+	if err != nil {
+		return err
+	}
+	sf.Mappings[ghost] = real
+	if err := writeSecretsFile(path, sf); err != nil {
+		return err
+	}
 	fmt.Printf("Added %s to %s\n", ghost, path)
 	return nil
+}
+
+func removeSecretsFileMapping(path, ghost string) (bool, error) {
+	sf, err := loadSecretsFile(path)
+	if err != nil {
+		return false, err
+	}
+	if _, ok := sf.Mappings[ghost]; !ok {
+		return false, nil
+	}
+	delete(sf.Mappings, ghost)
+	if err := writeSecretsFile(path, sf); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func printAuditEvent(e audit.Event) {
