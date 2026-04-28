@@ -45,7 +45,7 @@ brew install ghostkey
 # or: install from source
 go install github.com/jhaji2911/ghostkey/cmd/ghostkey@latest
 
-# Bootstrap config, secrets, .gitignore entries, and the local CA in ~/.ghostkey
+# Bootstrap config, secrets, and the local CA in ~/.ghostkey
 ghostkey init
 
 # Trust the CA (one-time setup, after the CA exists)
@@ -136,7 +136,7 @@ audit:
   file_path: "./ghostkey-audit.ndjson"
 ```
 
-Keep real credentials in a separate `secrets.yaml` (add to `.gitignore`):
+Keep real credentials in `~/.ghostkey/secrets.yaml`:
 
 ```yaml
 mappings:
@@ -160,7 +160,7 @@ Not currently implemented:
 
 ```
 ghostkey start [-c config] [--listen addr] [-v]    Start the proxy
-ghostkey init [--project] [--dir path] [--force]   Bootstrap config, secrets, and .gitignore
+ghostkey init [--force]                            Bootstrap config and secrets in ~/.ghostkey
 ghostkey wrap [--port 9876] -- <cmd> [args...]     Run command with proxy env vars injected
 ghostkey ca install                                Install CA to system trust store
 ghostkey ca uninstall                              Remove CA from trust store and disk
@@ -185,11 +185,11 @@ ghostkey version                                   Print version
 
 ## Operational Notes
 
-- `ghostkey init` now defaults to `~/.ghostkey`. Use `ghostkey init --project` for repo-local setup.
+- `ghostkey init` writes GhostKey-managed state to `~/.ghostkey`.
 - `ghostkey wrap` auto-infers common provider env vars such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`, `HF_TOKEN`, and `STRIPE_API_KEY` when their ghost tokens exist in configured vault.
 - Use `ghostkey wrap --env OPENAI_API_KEY=GHOST::openai -- <cmd>` when you want explicit control over injected application env vars.
 - `ghostkey ca install` requires the GhostKey CA to already exist. Running `ghostkey start` once is enough to generate it.
-- `ghostkey init` can create `ghostkey.yaml`, `secrets.yaml`, `.gitignore` entries, and local CA in one step.
+- `ghostkey init` can create `ghostkey.yaml`, `secrets.yaml`, and local CA in one step.
 - Service management is implemented for macOS (`launchd`) and Linux (`systemd --user`). Windows binaries exist, but service helpers are not implemented here.
 - The audit log stores ghost tokens and metadata only; file permissions still matter because request metadata may be sensitive.
 - With the file backend, `ghostkey vault add` and `ghostkey vault revoke` now persist directly to `secrets.yaml`.
